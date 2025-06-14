@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import re
 
 # Hard-coded rotations based on the provided PDF
 rotations = {
@@ -131,35 +132,30 @@ rotations = {
     ],
 }
 
-
-
 def assign_players(players):
     num_players = len(players)
-
     if num_players not in rotations:
         return None, None
-
     # Randomly assign numbers to players
     assigned_numbers = random.sample(range(1, num_players + 1), num_players)
-
     # Get the rotation based on the number of players
     rotation = rotations[num_players]
-
     # Map assigned numbers to player names
     player_assignments = {assigned_numbers[i]: players[i] for i in range(num_players)}
-
     return player_assignments, rotation
 
-
 def replace_numbers_with_names(rotation, player_assignments):
-    # Replace numbers in the rotation with the player names
     replaced_rotation = []
+    # Sort keys so that multi-digit numbers (10,11,12) get replaced before single digits
     for match in rotation:
-        for number, name in player_assignments.items():
-            match = match.replace(str(number), name)
-        replaced_rotation.append(match)
+        line = match
+        for number in sorted(player_assignments.keys(), key=lambda x: -len(str(x))):
+            name = player_assignments[number]
+            # Replace only whole-number matches (avoid replacing '1' inside '10')
+            pattern = rf'(?<!\d){number}(?!\d)'
+            line = re.sub(pattern, name, line)
+        replaced_rotation.append(line)
     return replaced_rotation
-
 
 # Streamlit App
 st.title('Pickleball Player Rotation Generator')
@@ -179,8 +175,8 @@ if player_input:
             replaced_rotation = replace_numbers_with_names(rotation, player_assignments)
 
             st.write("### Player Assignments")
-            for player, number in player_assignments.items():
-                st.write(f"{player}: {number}")
+            for num in sorted(player_assignments):
+                st.write(f"{num}: {player_assignments[num]}")
 
             st.write("### Rotation (with Player Names)")
             for match in replaced_rotation:
