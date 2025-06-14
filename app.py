@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import re
+import pandas as pd
 
 # Hard-coded rotations based on the provided PDF
 rotations = {
@@ -136,50 +137,67 @@ def assign_players(players):
     num_players = len(players)
     if num_players not in rotations:
         return None, None
-    # Randomly assign numbers to players
     assigned_numbers = random.sample(range(1, num_players + 1), num_players)
-    # Get the rotation based on the number of players
     rotation = rotations[num_players]
-    # Map assigned numbers to player names
     player_assignments = {assigned_numbers[i]: players[i] for i in range(num_players)}
     return player_assignments, rotation
 
 def replace_numbers_with_names(rotation, player_assignments):
     replaced_rotation = []
-    # Sort keys so that multi-digit numbers (10,11,12) get replaced before single digits
     for match in rotation:
         line = match
         for number in sorted(player_assignments.keys(), key=lambda x: -len(str(x))):
             name = player_assignments[number]
-            # Replace only whole-number matches (avoid replacing '1' inside '10')
             pattern = rf'(?<!\d){number}(?!\d)'
             line = re.sub(pattern, name, line)
         replaced_rotation.append(line)
     return replaced_rotation
 
 # Streamlit App
-st.title('Pickleball Player Rotation Generator')
+st.set_page_config(page_title='Rotation Generator')
 
-# Input for player names
-player_input = st.text_input('Enter player names (comma separated):')
+tab1, tab2 = st.tabs(['Pickleball', 'Jeff'])
 
-if player_input:
-    players = [name.strip() for name in player_input.split(',')]
+with tab1:
+    st.title('Pickleball Player Rotation Generator')
+    player_input = st.text_input('Enter player names (comma separated):', key='pickleball_input')
+    if player_input:
+        players = [name.strip() for name in player_input.split(',')]
+        if 6 <= len(players) <= 12:
+            player_assignments, rotation = assign_players(players)
+            if player_assignments and rotation:
+                replaced_rotation = replace_numbers_with_names(rotation, player_assignments)
+                st.write("### Player Assignments")
+                for num in sorted(player_assignments):
+                    st.write(f"{num}: {player_assignments[num]}")
+                st.write("### Rotation (with Player Names)")
+                for match in replaced_rotation:
+                    st.write(match)
+        else:
+            st.error('Please enter between 6 and 12 players.')
 
-    if 6 <= len(players) <= 12:
-        # Assign players and generate rotation
-        player_assignments, rotation = assign_players(players)
+with tab2:
+    st.title("Jeff's Random Groups of Four")
+    # File uploader for Excel
+    uploaded_file = st.file_uploader('Upload Excel file (column of names)', type=['xlsx', 'xls'], key='jeff_upload')
+    names = []
+    if uploaded_file is not None:
+        df = pd.read_excel(uploaded_file)
+        col = st.selectbox('Select column containing names', df.columns, key='jeff_column')
+        names += df[col].dropna().astype(str).tolist()
 
-        if player_assignments and rotation:
-            # Replace rotation numbers with player names
-            replaced_rotation = replace_numbers_with_names(rotation, player_assignments)
+    # Manual input as fallback or addition
+    jeff_input = st.text_input('Or enter player names (comma separated):', key='jeff_input')
+    if jeff_input:
+        manual = [n.strip() for n in jeff_input.split(',') if n.strip()]
+        names += manual
 
-            st.write("### Player Assignments")
-            for num in sorted(player_assignments):
-                st.write(f"{num}: {player_assignments[num]}")
-
-            st.write("### Rotation (with Player Names)")
-            for match in replaced_rotation:
-                st.write(match)
-    else:
-        st.error('Please enter between 6 and 12 players.')
+    # Generate groups if we have at least one name
+    if names:
+        # Shuffle for randomness
+        random.shuffle(names)
+        # Split into groups of 4
+        groups = [names[i:i+4] for i in range(0, len(names), 4)]
+        st.write('### Random Groups')
+        for idx, group in enumerate(groups, start=1):
+            st.write(f"Group {idx}: {', '.join(group)}")
